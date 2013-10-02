@@ -218,6 +218,10 @@ Optional properties:
 				If this property is specified, then the quotient adjustment values are added to the target
 				quotient values read from fuses before writing them into the CPR GCNT target control registers.
 				This property can be used to add static margin to the voltage rail managed by the CPR controller.
+- vdd-apc-optional-prim-supply:	Present: Regulator of highest priority to supply VDD APC power
+				Not Present: No such regulator.
+- vdd-apc-optional-sec-supply:	Present: Regulator of second highest priority to supply VDD APC power.
+				Not Present: No such regulator.
 
 Example:
 	apc_vreg_corner: regulator@f9018000 {
@@ -270,6 +274,8 @@ Example:
 		qcom,cpr-voltage-ceiling = <1050000 1150000 1280000>;
 		qcom,cpr-voltage-floor = <1050000 1050000 1100000>;
 		vdd-apc-supply = <&pm8226_s2>;
+		vdd-apc-optional-prim-supply = <&ncp6335d>;
+		vdd-apc-optional-sec-supply = <&fan53555>;
 		vdd-mx-supply = <&pm8226_l3_ao>;
 		qcom,vdd-mx-vmax = <1350000>;
 		qcom,vdd-mx-vmin-method = <1>;
