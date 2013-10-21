@@ -476,6 +476,25 @@ static struct msm_hs_port *get_matching_hs_port(struct platform_device *pdev)
 	return msm_uport;
 }
 
+/* Check if the uport line number matches with user id stored in pdata.
+ * User id information is stored during initialization. This function
+ * ensues that the same device is selected */
+
+static struct msm_hs_port *get_matching_hs_port(struct platform_device *pdev)
+{
+	struct msm_serial_hs_platform_data *pdata = pdev->dev.platform_data;
+	struct msm_hs_port *msm_uport = msm_hs_get_hs_port(pdev->id);
+
+	if ((!msm_uport) || (msm_uport->uport.line != pdev->id
+	   && msm_uport->uport.line != pdata->userid)) {
+		MSM_HS_ERR("uport line number mismatch!");
+		WARN_ON(1);
+		return NULL;
+	}
+
+	return msm_uport;
+}
+
 static ssize_t show_clock(struct device *dev, struct device_attribute *attr,
 			  char *buf)
 {
@@ -2321,8 +2340,7 @@ struct uart_port *msm_hs_get_uart_port(int port_index)
 
 	/* The uart_driver structure stores the states in an array.
 	 * Thus the corresponding offset from the drv->state returns
-	 * the state for the uart_port that is requested
-	 */
+	 * the state for the uart_port that is requested */
 	if (port_index == state->uart_port->line)
 		return state->uart_port;
 
