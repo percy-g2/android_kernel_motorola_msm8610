@@ -72,12 +72,6 @@ int ipa_register_intf(const char *name, const struct ipa_tx_intf *tx,
 		return -EINVAL;
 	}
 
-	if (ext && ext->num_props > IPA_NUM_PROPS_MAX) {
-		IPAERR("invalid ext num_props=%d max=%d\n", ext->num_props,
-				IPA_NUM_PROPS_MAX);
-		return -EINVAL;
-	}
-
 	len = sizeof(struct ipa_intf);
 	intf = kzalloc(len, GFP_KERNEL);
 	if (intf == NULL) {
