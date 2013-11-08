@@ -265,7 +265,7 @@ static int __mdp_pipe_tune_perf(struct mdss_mdp_pipe *pipe)
 
 	for (;;) {
 		rc = mdss_mdp_perf_calc_pipe(pipe, &perf,
-			pipe->flags & MDP_SECURE_OVERLAY_SESSION);
+			pipe->flags & MDP_SECURE_OVERLAY_SESSION, NULL);
 
 		if (!rc && (perf.mdp_clk_rate <= mdata->max_mdp_clk_rate))
 			break;
@@ -852,6 +852,9 @@ static int mdss_mdp_overlay_start(struct msm_fb_data_type *mfd)
 	if (ctl->power_on) {
 		if (!mdp5_data->mdata->batfet)
 			mdss_mdp_batfet_ctrl(mdp5_data->mdata, true);
+		if (!is_mdss_iommu_attached() &&
+					!mfd->panel_info->cont_splash_enabled)
+			mdss_iommu_attach(mdp5_data->mdata);
 		return 0;
 	}
 
@@ -969,6 +972,9 @@ int mdss_mdp_overlay_kickoff(struct msm_fb_data_type *mfd,
 	struct mdss_mdp_ctl *tmp;
 	int ret = 0;
 	int sd_in_pipe = 0;
+
+	if (!is_mdss_iommu_attached() && !mfd->panel_info->cont_splash_enabled)
+		mdss_iommu_attach(mdp5_data->mdata);
 
 	if (ctl->shared_lock)
 		mutex_lock(ctl->shared_lock);

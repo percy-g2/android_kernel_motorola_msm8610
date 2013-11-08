@@ -24,26 +24,14 @@
 
 /* truncate at 1k */
 #define MDSS_MDP_BUS_FACTOR_SHIFT 10
+/* 1.5 bus fudge factor */
+#define MDSS_MDP_BUS_FUDGE_FACTOR_IB(val) (((val) / 2) * 3)
+#define MDSS_MDP_BUS_FUDGE_FACTOR_HIGH_IB(val) (val << 1)
+#define MDSS_MDP_BUS_FUDGE_FACTOR_AB(val) (val << 1)
 #define MDSS_MDP_BUS_FLOOR_BW (1600000000ULL >> MDSS_MDP_BUS_FACTOR_SHIFT)
 
-static inline u64 fudge_factor(u64 val, u32 numer, u32 denom)
-{
-	u64 result = (val * (u64)numer);
-	do_div(result, denom);
-	return result;
-}
-
-#define AB_FUDGE_FACTOR(val)		fudge_factor((val),		\
-	(mdss_res->ab_factor.numer), (mdss_res->ab_factor.denom))
-
-#define IB_FUDGE_FACTOR(val)		fudge_factor((val),		\
-	(mdss_res->ib_factor.numer), (mdss_res->ib_factor.denom))
-
-#define HIGH_IB_FUDGE_FACTOR(val)	fudge_factor((val),		\
-	(mdss_res->high_ib_factor.numer), (mdss_res->high_ib_factor.denom))
-
-#define CLK_FUDGE_FACTOR(val)		fudge_factor((val),		\
-	(mdss_res->clk_factor.numer), (mdss_res->clk_factor.denom))
+/* 1.25 clock fudge factor */
+#define MDSS_MDP_CLK_FUDGE_FACTOR(val) (((val) * 5) / 4)
 
 enum {
 	MDSS_MDP_PERF_UPDATE_SKIP,
@@ -128,11 +116,11 @@ static void __mdss_mdp_ctrl_perf_ovrd(struct mdss_data_type *mdata,
 				ctl->mixer_right, &npipe);
 	}
 
-	*ab_quota = AB_FUDGE_FACTOR(*ab_quota);
+	*ab_quota = MDSS_MDP_BUS_FUDGE_FACTOR_AB(*ab_quota);
 	if (npipe > 1)
-		*ib_quota = HIGH_IB_FUDGE_FACTOR(*ib_quota);
+		*ib_quota = MDSS_MDP_BUS_FUDGE_FACTOR_HIGH_IB(*ib_quota);
 	else
-		*ib_quota = IB_FUDGE_FACTOR(*ib_quota);
+		*ib_quota = MDSS_MDP_BUS_FUDGE_FACTOR_IB(*ib_quota);
 
 	if (ovrd && (*ib_quota < MDSS_MDP_BUS_FLOOR_BW)) {
 		*ib_quota = MDSS_MDP_BUS_FLOOR_BW;
@@ -174,7 +162,7 @@ static int mdss_mdp_ctl_perf_commit(struct mdss_data_type *mdata, u32 flags)
 		mdss_mdp_bus_scale_set_quota(bus_ab_quota, bus_ib_quota);
 	}
 	if (flags & MDSS_MDP_PERF_UPDATE_CLK) {
-		clk_rate = CLK_FUDGE_FACTOR(clk_rate);
+		clk_rate = MDSS_MDP_CLK_FUDGE_FACTOR(clk_rate);
 		pr_debug("update clk rate = %lu HZ\n", clk_rate);
 		mdss_mdp_set_clk_rate(clk_rate);
 	}
@@ -195,16 +183,20 @@ static int mdss_mdp_ctl_perf_commit(struct mdss_data_type *mdata, u32 flags)
  * (MDP clock requirement) based on frame size and scaling requirements.
  */
 int mdss_mdp_perf_calc_pipe(struct mdss_mdp_pipe *pipe,
-		struct mdss_mdp_perf_params *perf, int tune)
+	struct mdss_mdp_perf_params *perf, int tune, struct mdss_mdp_img_rect *roi)
 {
 	struct mdss_mdp_mixer *mixer;
 	int fps = DEFAULT_FRAME_RATE;
 	u32 quota, rate, v_total, src_h;
+	struct mdss_mdp_img_rect src, dst;
 
 	if (!pipe || !perf || !pipe->mixer)
 		return -EINVAL;
 
 	mixer = pipe->mixer;
+	dst = pipe->dst;
+	src = pipe->src;
+
 	if (mixer->rotator_mode) {
 		v_total = pipe->flags & MDP_ROT_90 ? pipe->dst.w : pipe->dst.h;
 	} else if (mixer->type == MDSS_MDP_MIXER_TYPE_INTF) {
@@ -218,14 +210,17 @@ int mdss_mdp_perf_calc_pipe(struct mdss_mdp_pipe *pipe,
 		v_total = mixer->height;
 	}
 
+	if (roi)
+		mdss_mdp_crop_rect(&src, &dst, roi);
+
 	/*
 	 * when doing vertical decimation lines will be skipped, hence there is
 	 * no need to account for these lines in MDP clock or request bus
 	 * bandwidth to fetch them.
 	 */
-	src_h = pipe->src.h >> pipe->vert_deci;
+	src_h = src.h >> pipe->vert_deci;
 
-	quota = fps * pipe->src.w * src_h;
+	quota = fps * src.w * src_h;
 	if (pipe->src_fmt->chroma_sample == MDSS_MDP_CHROMA_420)
 		/*
 		 * with decimation, chroma is not downsampled, this means we
@@ -238,9 +233,9 @@ int mdss_mdp_perf_calc_pipe(struct mdss_mdp_pipe *pipe,
 	else
 		quota *= pipe->src_fmt->bpp;
 
-	rate = pipe->dst.w;
-	if (src_h > pipe->dst.h)
-		rate = (rate * src_h) / pipe->dst.h;
+	rate = dst.w;
+	if (src_h > dst.h)
+		rate = (rate * src_h) / dst.h;
 
 	rate *= v_total * fps;
 	if (mixer->rotator_mode) {
@@ -248,8 +243,9 @@ int mdss_mdp_perf_calc_pipe(struct mdss_mdp_pipe *pipe,
 		quota *= 2; /* bus read + write */
 		perf->ib_quota = quota;
 	} else {
-		perf->ib_quota = (quota / pipe->dst.h) * v_total;
+		perf->ib_quota = (quota / dst.h) * v_total;
 	}
+
 	perf->ab_quota = quota;
 	perf->mdp_clk_rate = rate;
 
@@ -287,7 +283,7 @@ static void mdss_mdp_perf_mixer_update(struct mdss_mdp_mixer *mixer,
 		}
 		*clk_rate = mixer->width * v_total * fps;
 		if (pinfo && pinfo->lcdc.v_back_porch < MDP_MIN_VBP)
-			*clk_rate = CLK_FUDGE_FACTOR(*clk_rate);
+			*clk_rate = MDSS_MDP_CLK_FUDGE_FACTOR(*clk_rate);
 
 		if (!pinfo) {
 			/* perf for bus writeback */
@@ -303,7 +299,7 @@ static void mdss_mdp_perf_mixer_update(struct mdss_mdp_mixer *mixer,
 		if (pipe == NULL)
 			continue;
 
-		if (mdss_mdp_perf_calc_pipe(pipe, &perf, 0))
+		if (mdss_mdp_perf_calc_pipe(pipe, &perf, 0, &mixer->roi))
 			continue;
 
 		ab_total += perf.ab_quota >> MDSS_MDP_BUS_FACTOR_SHIFT;
