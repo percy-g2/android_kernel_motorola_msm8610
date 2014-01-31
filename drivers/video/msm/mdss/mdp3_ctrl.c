@@ -789,6 +789,10 @@ static int mdp3_ctrl_reset(struct msm_fb_data_type *mfd)
 
 	vsync_client = mdp3_dma->vsync_client;
 
+	rc = panel->event_handler(panel, MDSS_EVENT_PANEL_OFF, NULL);
+	if (rc)
+		pr_err("fail to turn off panel\n");
+
 	rc = mdp3_dma->stop(mdp3_dma, mdp3_session->intf);
 	if (rc) {
 		pr_err("fail to stop the MDP3 dma\n");
