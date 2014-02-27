@@ -976,6 +976,11 @@ int mdss_mdp_overlay_kickoff(struct msm_fb_data_type *mfd,
 	if (!is_mdss_iommu_attached() && !mfd->panel_info->cont_splash_enabled)
 		mdss_iommu_attach(mdp5_data->mdata);
 
+	if (!ctl) {
+		pr_warn("kickoff on fb=%d without a ctl attched\n", mfd->index);
+		return ret;
+	}
+
 	if (ctl->shared_lock)
 		mutex_lock(ctl->shared_lock);
 
