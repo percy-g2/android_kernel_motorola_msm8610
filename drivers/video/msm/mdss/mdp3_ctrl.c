@@ -635,6 +635,9 @@ static int mdp3_ctrl_off(struct msm_fb_data_type *mfd)
 	mutex_lock(&mdp3_session->lock);
 	mutex_lock(&mdp3_session->offlock);
 
+	if (panel && panel->set_backlight)
+		panel->set_backlight(panel, 0);
+
 	if (!mdp3_session->status) {
 		pr_debug("fb%d is off already", mfd->index);
 		goto off_error;
