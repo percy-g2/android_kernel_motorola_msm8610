@@ -714,19 +714,22 @@ int msm_post_event(struct v4l2_event *event, int timeout)
 		return rc;
 	}
 
-	rc = wait_event_timeout(cmd_ack->wait,
-		!list_empty_careful(&cmd_ack->command_q.list),
-		msecs_to_jiffies(timeout));
+	/* should wait on session based condition */
+	do {
+		rc = wait_event_interruptible_timeout(cmd_ack->wait,
+			!list_empty_careful(&cmd_ack->command_q.list),
+			msecs_to_jiffies(timeout));
+		if (rc != -ERESTARTSYS)
+			break;
+	} while (1);
 
 	if (list_empty_careful(&cmd_ack->command_q.list)) {
 		if (!rc) {
-			pr_err("%s: Timed out for cmd = %d\n", __func__,
-				event_data->command);
+			pr_err("%s: Timed out\n", __func__);
 			rc = -ETIMEDOUT;
 		}
 		if (rc < 0) {
-			pr_err("%s: Failed for cmd = %d, rc = %d\n", __func__,
-				event_data->command, rc);
+			pr_err("%s: rc = %d\n", __func__, rc);
 			mutex_unlock(&session->lock);
 			return rc;
 		}

@@ -11,6 +11,10 @@
  *
  */
 
+#ifdef CONFIG_MSMB_CAMERA_MOTO
+#include <mach/camera2_moto.h>
+#else
+
 #ifndef __CAMERA2_H__
 #define __CAMERA2_H__
 
@@ -140,3 +144,4 @@ struct msm_eeprom_board_info {
 };
 
 #endif
+#endif /* CONFIG_MSMB_CAMERA_MOTO */
