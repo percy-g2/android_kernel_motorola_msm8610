@@ -7325,6 +7325,14 @@ WLANTL_STATxAuth
   }
 #endif /* FEATURE_WLAN_TDLS */
 
+  if( tlMetaInfo.ucIsArp )
+  {
+    /*Send ARP at lowest Phy rate and through WQ5 */
+    VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO, "send arp pkt via WQ5 @ low rate");
+    ucTxFlag |= HAL_USE_BD_RATE_MASK;
+    ucTxFlag |= HAL_USE_FW_IN_TX_PATH;
+  }
+
   vosStatus = (VOS_STATUS)WDA_DS_BuildTxPacketInfo( pvosGCtx, 
                      vosDataBuff , &vDestMacAddr,
                      tlMetaInfo.ucDisableFrmXtl, &usPktLen,
@@ -10036,7 +10044,7 @@ WLAN_TLAPGetNextTxIds
 {
   WLANTL_CbType*  pTLCb;
   v_U8_t          ucACFilter = 1;
-  v_U8_t          ucNextSTA ; 
+  v_U8_t          ucNextSTA = 0; // Motorola IKJB42MAIN-4103, are002, initialization
   v_BOOL_t        isServed = TRUE;  //current round has find a packet or not
   v_U8_t          ucACLoopNum = WLANTL_AC_VO + 1; //number of loop to go
   v_U8_t          uFlowMask; // TX FlowMask from WDA

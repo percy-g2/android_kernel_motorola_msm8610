@@ -669,6 +669,7 @@ int wlan_hdd_cfg80211_register(struct device *dev,
     wiphy->flags |= WIPHY_FLAG_SUPPORTS_SCHED_SCAN;
     wiphy->max_sched_scan_ssids = MAX_SCAN_SSID;
     wiphy->max_match_sets       = SIR_PNO_MAX_SUPP_NETWORKS;
+    wiphy->max_sched_scan_ie_len = SIR_MAC_MAX_IE_LENGTH;
 #endif/*FEATURE_WLAN_SCAN_PNO*/
 
     /* even with WIPHY_FLAG_CUSTOM_REGULATORY,
@@ -677,6 +678,8 @@ int wlan_hdd_cfg80211_register(struct device *dev,
        driver need to determine what to do with both
        regulatory settings */
     wiphy->reg_notifier = wlan_hdd_crda_reg_notifier;
+
+    wiphy->flags |= WIPHY_FLAG_DISABLE_11D_HINT_FROM_CORE;
 
     wiphy->max_scan_ssids = MAX_SCAN_SSID;
 
@@ -691,19 +694,20 @@ int wlan_hdd_cfg80211_register(struct device *dev,
                              | BIT(NL80211_IFTYPE_P2P_GO)
                              | BIT(NL80211_IFTYPE_AP);
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,4,0))
-    if( pCfg->enableMCC )
+    if(pCfg->advertiseConcurrentOperation)
     {
-        /* Currently, supports up to two channels */
-        wlan_hdd_iface_combination.num_different_channels = 2;
-
-        if( !pCfg->allowMCCGODiffBI )
-            wlan_hdd_iface_combination.beacon_int_infra_match = true;
-
+    #if (LINUX_VERSION_CODE  >= KERNEL_VERSION(3,4,0))
+        if( pCfg->enableMCC )
+        {
+            /* Currently, supports up to two channels */
+            wlan_hdd_iface_combination.num_different_channels = 2;
+            if( !pCfg->allowMCCGODiffBI )
+                wlan_hdd_iface_combination.beacon_int_infra_match = true;
+        }
+        wiphy->iface_combinations = &wlan_hdd_iface_combination;
+        wiphy->n_iface_combinations = 1;
+     #endif
     }
-    wiphy->iface_combinations = &wlan_hdd_iface_combination;
-    wiphy->n_iface_combinations = 1;
-#endif
 
     /* Before registering we need to update the ht capabilitied based
      * on ini values*/
@@ -2397,10 +2401,6 @@ static int wlan_hdd_cfg80211_start_ap(struct wiphy *wiphy,
 #endif
         status = wlan_hdd_cfg80211_start_bss(pAdapter, &params->beacon, params->ssid,
                                              params->ssid_len, params->hidden_ssid);
-        if (0 == status)
-        {
-            hdd_start_p2p_go_connection_in_progress_timer(pAdapter);
-        }
     }
 
     EXIT();
@@ -4234,6 +4234,85 @@ int wlan_hdd_cfg80211_pmksa_candidate_notify(
 }
 #endif //FEATURE_WLAN_LFR
 
+//Begin fjdw67 Motorola, IKJB42MAIN-6385 - LFR roaming instrumentation
+#ifdef FEATURE_WLAN_LFR_METRICS
+/* FUNCTION: wlan_hdd_cfg80211_roam_metrics_preauth
+ * 802.11r/LFR metrics reporting function to report preauth initiation*/
+#define MAX_LFR_METRICS_EVENT_LENGTH 100
+eHalStatus wlan_hdd_cfg80211_roam_metrics_preauth(hdd_adapter_t * pAdapter,tCsrRoamInfo *pRoamInfo)
+{
+    unsigned char metrics_notification[MAX_LFR_METRICS_EVENT_LENGTH + 1];
+    union iwreq_data wrqu;
+    ENTER();
+    if (NULL == pAdapter) {
+        hddLog(LOGE, "hdd_tx_per_hit_cb: pAdapter is NULL\n");
+        return eHAL_STATUS_SUCCESS;
+    }
+    // create the event
+    memset(&wrqu, 0, sizeof(wrqu));
+    memset(metrics_notification, 0, sizeof(metrics_notification));
+    memcpy(metrics_notification, "QCOM: LFR_PREAUTH_INIT \0", 24);
+    memcpy(metrics_notification+24, pRoamInfo->bssid, sizeof(tCsrBssid));
+    //memcpy(metrics_notification+23+ sizeof(tCsrBssid), '\0', 1);
+    wrqu.data.pointer = metrics_notification;
+    wrqu.data.length = 24 + sizeof(tCsrBssid);
+    wireless_send_event(pAdapter->dev, IWEVCUSTOM, &wrqu, metrics_notification);
+    vos_mem_free(pRoamInfo);
+    EXIT();
+    return eHAL_STATUS_SUCCESS;
+}
+/* FUNCTION: wlan_hdd_cfg80211_roam_metrics_preauth_status
+ * 802.11r/LFR metrics reporting function to report preauth completion or failure */
+eHalStatus wlan_hdd_cfg80211_roam_metrics_preauth_status(hdd_adapter_t * pAdapter,tCsrRoamInfo *pRoamInfo,bool preauth_status)
+{
+    unsigned char metrics_notification[MAX_LFR_METRICS_EVENT_LENGTH + 1];
+    union iwreq_data wrqu;
+    ENTER();
+    if (NULL == pAdapter) {
+        hddLog(LOGE, "hdd_tx_per_hit_cb: pAdapter is NULL\n");
+        return eHAL_STATUS_SUCCESS;
+    }
+    // create the event
+    memset(&wrqu, 0, sizeof(wrqu));
+    memset(metrics_notification, 0, sizeof(metrics_notification));
+    memcpy(metrics_notification, "QCOM: LFR_PREAUTH_STATUS \0", 26);
+    memcpy(metrics_notification+26, pRoamInfo->bssid, sizeof(tCsrBssid));
+    if(1 == preauth_status)
+        memcpy(metrics_notification+26+ sizeof(tCsrBssid), " TRUE", 5);
+    else
+        memcpy(metrics_notification+26+ sizeof(tCsrBssid), " FALSE", 6);
+    wrqu.data.pointer = metrics_notification;
+    wrqu.data.length = 32 + sizeof(tCsrBssid);
+    wireless_send_event(pAdapter->dev, IWEVCUSTOM, &wrqu, metrics_notification);
+    vos_mem_free(pRoamInfo);
+    EXIT();
+    return eHAL_STATUS_SUCCESS;
+}
+/* FUNCTION: wlan_hdd_cfg80211_roam_metrics_handover
+ * 802.11r/LFR metrics reporting function to report handover initiation */
+eHalStatus wlan_hdd_cfg80211_roam_metrics_handover(hdd_adapter_t * pAdapter,tCsrRoamInfo *pRoamInfo)
+{
+    unsigned char metrics_notification[MAX_LFR_METRICS_EVENT_LENGTH + 1];
+    union iwreq_data wrqu;
+    ENTER();
+    if (NULL == pAdapter) {
+        hddLog(LOGE, "hdd_tx_per_hit_cb: pAdapter is NULL\n");
+        return eHAL_STATUS_SUCCESS;
+    }
+    // create the event
+    memset(&wrqu, 0, sizeof(wrqu));
+    memset(metrics_notification, 0, sizeof(metrics_notification));
+    memcpy(metrics_notification, "QCOM: LFR_PREAUTH_HANDOVER \0", 28);
+    memcpy(metrics_notification+28, pRoamInfo->bssid, sizeof(tCsrBssid));
+    wrqu.data.pointer = metrics_notification;
+    wrqu.data.length = 28 + sizeof(tCsrBssid);
+    wireless_send_event(pAdapter->dev, IWEVCUSTOM, &wrqu, metrics_notification);
+    vos_mem_free(pRoamInfo);
+    EXIT();
+    return eHAL_STATUS_SUCCESS;
+}
+#endif
+//End fjdw67 Motorola, IKJB42MAIN-6385
 /*
  * FUNCTION: hdd_cfg80211_scan_done_callback
  * scanning callback function, called after finishing scan
@@ -4340,6 +4419,11 @@ static eHalStatus hdd_cfg80211_scan_done_callback(tHalHandle halHandle,
      * cfg80211_scan_done informing NL80211 about completion
      * of scanning
      */
+    //Begin Mot IKHSS7-28961 : Dont allow sleep so that supplicant
+    // can fetch scan results before kerenel ages it out if slept immediately
+    // and sleep duration is more than the ageout time.
+    hdd_prevent_suspend_after_scan(HZ/4);
+   //END IKHSS7-28961
     cfg80211_scan_done(req, false);
     complete(&pScanInfo->abortscan_event_var);
 
@@ -4374,14 +4458,6 @@ v_BOOL_t hdd_isScanAllowed( hdd_context_t *pHddCtx )
     VOS_STATUS status = 0;
     v_U8_t staId = 0;
     v_U8_t *staMac = NULL;
-
-    if (VOS_TIMER_STATE_RUNNING ==
-                vos_timer_getCurrentState(&pHddCtx->hdd_p2p_go_conn_is_in_progress))
-    {
-        hddLog(VOS_TRACE_LEVEL_INFO,
-              "%s: Connection is in progress, Do not allow the scan", __func__);
-        return VOS_FALSE;
-    }
 
     status = hdd_get_front_adapter ( pHddCtx, &pAdapterNode );
 
@@ -4576,12 +4652,21 @@ int wlan_hdd_cfg80211_scan( struct wiphy *wiphy,
          * Becasue of this, driver is assuming that this is not wildcard scan and so
          * is not aging out the scan results.
          */
-        if (request->ssids && '\0' == request->ssids->ssid[0])
-        {
+        /* Motorola - support passive scan for autonomous mode - START */
+        if (NULL == request->ssids) {
+            request->n_ssids = -1;
+        /* Motorola - support passive scan for autonomous mode - END */
+        } else if ('\0' == request->ssids->ssid[0]) {
             request->n_ssids = 0;
         }
-
-        if ((request->ssids) && (0 < request->n_ssids))
+        /* Motorola - support passive scan for autonomous mode - START */
+        if (-1 == request->n_ssids) {
+            scanRequest.scanType = eSIR_PASSIVE_SCAN;
+            scanRequest.minChnTime = cfg_param->nPassiveMinChnTime;
+            scanRequest.maxChnTime = cfg_param->nPassiveMaxChnTime;
+            hddLog(VOS_TRACE_LEVEL_INFO, "requesting PASSIVE SCAN");
+        /* Motorola - support passive scan for autonomous mode - END */
+        } else if (0 < request->n_ssids)
         {
             tCsrSSIDInfo *SsidInfo;
             int j;
@@ -4611,19 +4696,23 @@ int wlan_hdd_cfg80211_scan( struct wiphy *wiphy,
             }
             /* set the scan type to active */
             scanRequest.scanType = eSIR_ACTIVE_SCAN;
+            scanRequest.minChnTime = cfg_param->nActiveMinChnTime;
+            scanRequest.maxChnTime = cfg_param->nActiveMaxChnTime;
         }
         else if(WLAN_HDD_P2P_GO == pAdapter->device_mode)
         {
             /* set the scan type to active */
             scanRequest.scanType = eSIR_ACTIVE_SCAN;
+            scanRequest.minChnTime = cfg_param->nActiveMinChnTime;
+            scanRequest.maxChnTime = cfg_param->nActiveMaxChnTime;
         }
         else
         {
             /*Set the scan type to default type, in this case it is ACTIVE*/
             scanRequest.scanType = pScanInfo->scan_mode;
+            scanRequest.minChnTime = cfg_param->nActiveMinChnTime;
+            scanRequest.maxChnTime = cfg_param->nActiveMaxChnTime;
         }
-        scanRequest.minChnTime = cfg_param->nActiveMinChnTime;
-        scanRequest.maxChnTime = cfg_param->nActiveMaxChnTime;
     }
     else
     {
@@ -7331,11 +7420,27 @@ static int wlan_hdd_cfg80211_sched_scan_start(struct wiphy *wiphy,
         pPnoRequest->aNetworks[i].rssiThreshold = 0; //Default value
     }
 
+    VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
+              "request->ie_len = %d", request->ie_len);
+    if ((0 < request->ie_len) && (NULL != request->ie))
+    {
+        pPnoRequest->us24GProbeTemplateLen = request->ie_len;
+        memcpy(&pPnoRequest->p24GProbeTemplate, request->ie,
+                pPnoRequest->us24GProbeTemplateLen);
+
+        pPnoRequest->us5GProbeTemplateLen = request->ie_len;
+        memcpy(&pPnoRequest->p5GProbeTemplate, request->ie,
+                pPnoRequest->us5GProbeTemplateLen);
+    }
+
     /* framework provides interval in ms */
-    pPnoRequest->scanTimers.ucScanTimersCount = 1;
-    pPnoRequest->scanTimers.aTimerValues[0].uTimerValue =
-          (request->interval)/1000;
-    pPnoRequest->scanTimers.aTimerValues[0].uTimerRepeat = 0;
+    //BEGIN MOT a19110 IKJBMR2-1528 set PNO intervals
+    pPnoRequest->scanTimers.ucScanTimersCount = 2;
+    pPnoRequest->scanTimers.aTimerValues[0].uTimerRepeat = 7;
+    pPnoRequest->scanTimers.aTimerValues[0].uTimerValue = 45;
+    pPnoRequest->scanTimers.aTimerValues[1].uTimerRepeat = 0;
+    pPnoRequest->scanTimers.aTimerValues[1].uTimerValue = 480;
+    //END IKJBMR2-1528
     pPnoRequest->modePNO = SIR_PNO_MODE_ON_SUSPEND;
 
     status = sme_SetPreferredNetworkList(WLAN_HDD_GET_HAL_CTX(pAdapter),

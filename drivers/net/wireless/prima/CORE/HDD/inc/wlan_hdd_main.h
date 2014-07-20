@@ -692,6 +692,7 @@ typedef struct multicast_addr_list
    v_U8_t isFilterApplied;
    v_U8_t mc_cnt;
    v_U8_t addr[WLAN_HDD_MAX_MC_ADDR_LIST][ETH_ALEN];
+   v_U8_t filter_index[WLAN_HDD_MAX_MC_ADDR_LIST]; // IKJB42MAIN-1244, Motorola, a19091
 } t_multicast_add_list;
 #endif
 
@@ -824,6 +825,13 @@ struct hdd_adapter_s
    hdd_cfg80211_state_t cfg80211State;
 
 #ifdef WLAN_FEATURE_PACKET_FILTERING
+   // IKJB42MAIN-1244, Motorola, a19091 - START
+   v_U32_t user_filter_config;
+   v_U32_t driver_filter_config;
+   v_U8_t ipv6_user_set_map : 4;
+   v_U8_t ipv6_code_set_map : 4;
+   v_SCHAR_t filter_v6_index;
+   // IKJB42MAIN-1244, Motorola, a19091 - END
    t_multicast_add_list mc_addr_list;
 #endif
 
@@ -902,6 +910,11 @@ struct hdd_context_s
    
    /** Pointer for configuration data */
    const struct firmware *cfg;
+   
+#ifdef WLAN_NV_OTA_UPGRADE
+   /** Pointer for nv data programmed by factory */
+   const struct firmware *nv_factory;
+#endif
    
    /** Pointer for nv data */
    const struct firmware *nv;
@@ -1026,6 +1039,7 @@ struct hdd_context_s
     tANI_U16 connected_peer_count;
     tdls_scan_context_t tdls_scan_ctxt;
 #endif
+
     hdd_traffic_monitor_t traffic_monitor;
 
     /* MC/BC Filter state variable
@@ -1035,9 +1049,6 @@ struct hdd_context_s
     v_U8_t configuredMcastBcastFilter;
 
     v_U8_t sus_res_mcastbcast_filter;
-
-    vos_timer_t hdd_p2p_go_conn_is_in_progress;
-
 #ifdef FEATURE_WLAN_LPHB
     lphbEnableStruct  lphbEnableReq;
 #endif /* FEATURE_WLAN_LPHB */
@@ -1125,6 +1136,7 @@ void wlan_hdd_clear_concurrency_mode(hdd_context_t *pHddCtx, tVOS_CON_MODE mode)
 void wlan_hdd_reset_prob_rspies(hdd_adapter_t* pHostapdAdapter);
 void hdd_prevent_suspend(void);
 void hdd_allow_suspend(void);
+void hdd_prevent_suspend_after_scan(long hz); //Mot IKHSS7-28961 :Empty scan results
 void hdd_allow_suspend_timeout(v_U32_t timeout);
 bool hdd_is_ssr_required(void);
 void hdd_set_ssr_required(e_hdd_ssr_required value);
