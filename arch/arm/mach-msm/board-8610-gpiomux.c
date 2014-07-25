@@ -756,6 +756,8 @@ static struct msm_gpiomux_config peripheral_configs[] = {
 		.settings = {
 			[GPIOMUX_ACTIVE]    = &gpio_2ma_pull_up,
 			[GPIOMUX_SUSPENDED] = &gpio_2ma_pull_up,
+		},
+	},
 };
 
 static struct gpiomux_setting ice40_spi_cs_act_config = {

@@ -3252,7 +3252,6 @@ static const struct wcd9xxx_mbhc_intr cdc_intr_ids = {
 
 static int msm8x10_wcd_device_up(struct snd_soc_codec *codec)
 {
-	int ret = 0;
 	struct msm8x10_wcd_priv *msm8x10_wcd_priv =
 					snd_soc_codec_get_drvdata(codec);
 
@@ -3274,7 +3273,8 @@ static int msm8x10_wcd_device_up(struct snd_soc_codec *codec)
 
 	wcd9xxx_mbhc_deinit(&msm8x10_wcd_priv->mbhc);
 
-	ret = wcd9xxx_mbhc_init(&msm8x10_wcd_priv->mbhc,
+#ifndef CONFIG_SND_SOC_TPA6165A2
+	int ret = wcd9xxx_mbhc_init(&msm8x10_wcd_priv->mbhc,
 				&msm8x10_wcd_priv->resmgr,
 				codec, msm8x10_wcd_enable_mbhc_micbias,
 				&mbhc_cb, &cdc_intr_ids,
@@ -3285,6 +3285,7 @@ static int msm8x10_wcd_device_up(struct snd_soc_codec *codec)
 	else
 		wcd9xxx_mbhc_start(&msm8x10_wcd_priv->mbhc,
 				msm8x10_wcd_priv->mbhc.mbhc_cfg);
+#endif
 
 	mutex_unlock(&codec->mutex);
 
