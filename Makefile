@@ -366,10 +366,11 @@ CFLAGS_GCOV	= -fprofile-arcs -ftest-coverage
 
 # Use LINUXINCLUDE when you must reference the include/ directory.
 # Needed to be compatible with the O= option
-LINUXINCLUDE    := -I$(srctree)/arch/$(hdr-arch)/include \
-                   -Iarch/$(hdr-arch)/include/generated -Iinclude \
-                   $(if $(KBUILD_SRC), -I$(srctree)/include) \
-                   -include $(srctree)/include/linux/kconfig.h
+LINUXINCLUDE    := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
+		   -fno-strict-aliasing -fno-common \
+		   -Wno-format-security -Wno-array-bounds \
+		   -Wno-maybe-uninitialized Wno-implicit-function-declaration \
+		   -fno-delete-null-pointer-checks
 
 KBUILD_CPPFLAGS := -D__KERNEL__
 
