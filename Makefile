@@ -361,11 +361,14 @@ CC		= $(srctree)/scripts/gcc-wrapper.py $(REAL_CC)
 
 CHECKFLAGS     := -D__linux__ -Dlinux -D__STDC__ -Dunix -D__unix__ \
 		  -Wbitwise -Wno-return-void $(CF)
-CFLAGS_MODULE   =
-AFLAGS_MODULE   =
+ARM_FLAGS	= -mtune=cortex-a7 -mfpu=neon-vfpv4 \
+		  -fmodulo-sched -fmodulo-sched-allow-regmoves \
+		  -fschedule-insns -fschedule-insns2
+CFLAGS_MODULE   = -DMODULE $(ARM_FLAGS)
+AFLAGS_MODULE   = -DMODULE $(ARM_FLAGS)
 LDFLAGS_MODULE  =
-CFLAGS_KERNEL	=
-AFLAGS_KERNEL	=
+CFLAGS_KERNEL	= $(ARM_FLAGS)
+AFLAGS_KERNEL	= $(ARM_FLAGS)
 CFLAGS_GCOV	= -fprofile-arcs -ftest-coverage
 
 
@@ -380,9 +383,10 @@ KBUILD_CPPFLAGS := -D__KERNEL__
 
 KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 		   -fno-strict-aliasing -fno-common \
-		   -Wno-format-security -Wno-array-bounds \
-		   -Wno-maybe-uninitialized -Wno-implicit-function-declaration \
-		   -fno-delete-null-pointer-checks
+		   -Wno-format-security \
+		   -fno-delete-null-pointer-checks -Wno-array-bounds \
+		   -Wno-unused-function -Wno-unused-variable -Wno-uninitialized \
+		   -Wno-maybe-uninitialized -Wno-declaration-after-statement
 KBUILD_AFLAGS_KERNEL :=
 KBUILD_CFLAGS_KERNEL :=
 KBUILD_AFLAGS   := -D__ASSEMBLY__
