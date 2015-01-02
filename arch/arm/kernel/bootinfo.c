@@ -113,7 +113,7 @@ EXPORT_SYMBOL(bi_powerup_reason);
  * bi_mbm_version()                -- returns the MBM version
  */
 #ifdef CONFIG_OF
-static void __init of_mbmver(u32 *ver)
+static void of_mbmver(u32 *ver)
 {
 	struct device_node *n = of_find_node_by_path("/chosen");
 
